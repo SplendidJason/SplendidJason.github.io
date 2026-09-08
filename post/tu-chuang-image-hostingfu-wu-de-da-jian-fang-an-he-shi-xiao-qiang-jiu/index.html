@@ -1,0 +1,511 @@
+<html>
+<head>
+    <meta charset="utf-8"/>
+<meta name="description" content=""/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+<title>图床（image-hosting）服务的搭建方案和失效抢救 | PeterLu&#39;s Blog</title>
+
+<link rel="shortcut icon" href="https://SplendidJason.github.io/favicon.ico?v=1788867496724">
+
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://SplendidJason.github.io/styles/main.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/css/bootstrap.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets/highlight.min.js"></script>
+<script src="https://cdn.bootcss.com/highlight.js/9.15.10/languages/dockerfile.min.js"></script>
+<script src="https://cdn.bootcss.com/highlight.js/9.15.10/languages/dart.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/moment@2.27.0/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/js/bootstrap.min.js"></script>
+<!-- DEMO JS -->
+<!--<script src="media/scripts/index.js"></script>-->
+
+
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.css">
+</head>
+<body>
+<div class="main gt-bg-theme-color-first">
+    <nav class="navbar navbar-expand-lg">
+    <div class="navbar-brand">
+        <img class="user-avatar" src="/images/avatar.png" alt="头像">
+        <div class="site-name gt-c-content-color-first">
+            PeterLu&#39;s Blog
+        </div>
+    </div>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <i class="fas fa-bars gt-c-content-color-first" style="font-size: 18px"></i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <div class="navbar-nav mr-auto" style="text-align: center">
+            
+                <div class="nav-item">
+                    
+                        <a href="https://SplendidJason.github.io" class="menu gt-a-link">
+                            首页
+                        </a>
+                    
+                </div>
+            
+                <div class="nav-item">
+                    
+                        <a href="https://SplendidJason.github.io/archives" class="menu gt-a-link">
+                            历史篇目
+                        </a>
+                    
+                </div>
+            
+                <div class="nav-item">
+                    
+                        <a href="https://SplendidJason.github.io/tags" class="menu gt-a-link">
+                            标签分类
+                        </a>
+                    
+                </div>
+            
+                <div class="nav-item">
+                    
+                        <a href="https://SplendidJason.github.io/post/about" class="menu gt-a-link">
+                            关于
+                        </a>
+                    
+                </div>
+            
+        </div>
+        <div style="text-align: center">
+            <form id="gridea-search-form" style="position: relative" data-update="1788867496724" action="/search/index.html">
+                <input class="search-input" autocomplete="off" spellcheck="false" name="q" placeholder="搜索文章" />
+                <i class="fas fa-search gt-c-content-color-first" style="position: absolute; top: 9px; left: 10px;"></i>
+            </form>
+        </div>
+    </div>
+</nav>
+
+    <div class="post-container">
+        <div class="post-detail gt-bg-theme-color-second">
+            <article class="gt-post-content">
+                <h2 class="post-title">
+                    图床（image-hosting）服务的搭建方案和失效抢救
+                </h2>
+                <div class="post-info">
+                    <time class="post-time gt-c-content-color-first">
+                        · 2026-08-27 ·
+                    </time>
+                    
+                </div>
+                <div class="post-content">
+                    <h1 id="1一点题外">1.一点题外</h1>
+<p>今天是中元节。<br>
+我母亲从前天开始筹备冥包今天要烧。<br>
+虽然不喜欢，但父亲不在了，冥包（类似信封）上的收件人烧件人信息只能我填。<br>
+一翻之前父亲准备的“通讯录”，才发现多处错别字，他连我爷爷的名字都写错。<br>
+也是很好笑但笑不出来。<br>
+这是题外话。<br>
+<img src="https://img.brightwater.cc/image-for-obsidian/2026-08-28_05-fire.jpg" alt="" loading="lazy"></p>
+<p>前两天像是突然睡醒一样，翻开obsidian仓库的时候，才发现我的图床链接全部失效了<br>
+昨天开始着手抢救。<br>
+对于想要搭建图床（image-hosting）服务来支持图文笔记和个人自建站点的朋友们，以下的一些内容，或可供参考。</p>
+<p>PS：Backblaze的免费S3对象存储和 digitalplat 的免费域名是真的香<br>
+不过，前者容量有限制，后者需要签到续期，千万别学我忘了续签。</p>
+<hr>
+<h1 id="2-prompt-to-articulate-the-problem">2. Prompt to articulate the problem</h1>
+<h2 id="21-背景信息">2.1 背景信息</h2>
+<ol>
+<li>我去年按照  <a href="https://thewanderingallison.github.io/posts/image-hosting-blog-cloudflare-backblaze-piclist/">activeWebTab</a> 博文指引，在backblaze上建立了存储桶，然后参考博文中的代码在cloudflare上部署了一个用于缓存图片访问的 cloudflare worker，起名为image-serving-bridge</li>
+<li>我在免费域名注册网站注册了两个域名，全都托管到了cloudflare上，然后两个分别设置了 image.mydomainname.com 这样的用于图床服务的二级子域名，对应backblaze上的两个bucket；还有一个 sink.mydomainname.com的二级子域名</li>
+<li>如上第2步的图床服务二级子域名，我应该都加到了 image-serving-bridge 这个worker的代码或设置里，作为routes</li>
+<li>我将 github上的这个短链服务项目<a href="https://github.com/miantiao-me/Sink">🌐: GitHub - miantiao-me/Sink:</a> 部署到cloudflare上作为worker，自动生成一个可访问域名，但我设置成了custom domain，及如上第2步的sink.mydomainname.com</li>
+<li>我将部署的 sink 服务添加到了Piclist上；也将两个backblaze的S3图片存储bucket，添加进了Piclist，custom domain即设置为第2步的两个image子域名</li>
+<li>我日常在obsidian中撰写图文笔记或博文草稿时，使用 Image auto upload 插件链接Piclist，图片粘贴进md文件，自动上传到对应backblaze 的bucket，并且自动将访问地址转成 sink.mydomainname.com/picturecode 这样的的短链。大部分时间，短链服务工作正常。总体上，图床服务使用顺利</li>
+<li>去年第2步注册的两个免费域名，我今年忘记签到续费，域名丢失无法找回，导致我笔记和博文草稿中的图片链接全部失效</li>
+</ol>
+<h2 id="22-现在已做的补救工作">2.2 现在已做的补救工作</h2>
+<ol>
+<li>我已经在dynadot上重新购买了新域名 brightwater.cc , 并且已经托管到cloudflare上，分别设置了 img.brightwater.cc 和 image.brightwater.cc 两个子域名，准备用于替换</li>
+<li>经查看cloudflare工作太，原来部署的免费域名，应该都自动删除了，如上背景信息中提到的 image-serving-bridge 和sink两个woker，都还在</li>
+</ol>
+<h2 id="23-接下来的工作">2.3 接下来的工作</h2>
+<ol>
+<li>进一步执行工作，将obsidian中失效的图片链接救活</li>
+<li>考虑在cloudflare或者阿里云购买云存储服务，用于新的图床服务，免费的backblaze空间有限</li>
+<li>使用新买的brightwater.cc,新建blog二级子域名和一个专栏子域名，用来搭建两个网站，服务器可能计划使用阿里云，blog计划选用VitePress</li>
+</ol>
+<h2 id="24-任务">2.4 任务</h2>
+<ol>
+<li>对于obsidian中的图片链接抢救工作，请你详细告诉我接下来我应该怎么做</li>
+<li>对于图床云存储产品的购买，请你给我一些建议。图床服务主要两类，一是用于我本地obsidian笔记，二是用于博文</li>
+<li>对于博客和专栏两个网站，请给我一些服务器选用（选国内还是国外）和网站框架主题选用的建议</li>
+</ol>
+<p>BTW:<br>
+有关Backblaze 搭配Cloudflare搭建免费图床的博文，还可以参考这篇 <a href="https://ldo.one/post/backblaze-yes/">愉快的白嫖 Backblaze 的10G对象存储</a> ，作为一些补充信息参考。但里面将bucket类型设置为public的做法非常不可取，后文的4.1 section会提到。</p>
+<hr>
+<h1 id="3-ai-answer">3. AI answer</h1>
+<p><strong>ai</strong>: 这是一个完全可以<strong>100% 无损救回</strong>的典型场景！</p>
+<p>只要你在 Backblaze 中的存储桶（Bucket）数据没有删除，且 Cloudflare 中的 Sink 数据库（D1/KV）还在，<strong>你不需要重新上传任何一张图片</strong>。问题的本质仅仅是**“访问域名断裂”**。</p>
+<p>以下是为您量身定制的抢救步骤、存储选型及建站建议：</p>
+<hr>
+<h3 id="31-obsidian-失效图片链接抢救指南4步完全救回">3.1、 Obsidian 失效图片链接抢救指南（4步完全救回）</h3>
+<p>整体逻辑：<strong>恢复节点通信</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>修正数据库里的图片原地址</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>批量替换笔记里的短链域名</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>更新上传工具配置</strong>。</p>
+<h4 id="第一步在-cloudflare-中恢复-worker-的自定义域名绑定">第一步：在 Cloudflare 中恢复 Worker 的自定义域名绑定</h4>
+<ol>
+<li><strong>绑定图床 Bridge Worker</strong>：
+<ul>
+<li>进入 Cloudflare Dashboard <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Workers &amp; Pages</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> 选择 <code>image-serving-bridge</code>。</li>
+<li>进入 <strong>Settings</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Domains &amp; Routes</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Add Custom Domain</strong>。</li>
+<li>分别添加你的新二级域名：<code>img.brightwater.cc</code> 和 <code>image.brightwater.cc</code>。</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p><a href="%E6%8F%90%E7%A4%BA">tips</a><br>
+这里Gemini忘记了要把worker代码中的旧域名，replace成新的域名<br>
+worker代码里的白名单，以及访问次数限制，可以根据自己的需求tailor<br>
+Cloudflare提供了一个 wrangler的工具，为了更好的获得worker的部署反馈，方便问AI或者直接AI agent帮忙，完全可以用powershell 等工具使用 npm或者npx安装wrangler拉取项目到本地，然后本地修改部署到cloudflare</p>
+</blockquote>
+<ol start="2">
+<li><strong>绑定 Sink 短链 Worker</strong>：
+<ul>
+<li>进入 Sink 对应的 Worker 项目。</li>
+<li>进入 <strong>Settings</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Domains &amp; Routes</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Add Custom Domain</strong>。</li>
+<li>添加你的新短链域名（例如 <code>sink.brightwater.cc</code> 或 <code>s.brightwater.cc</code>）。</li>
+</ul>
+</li>
+<li><strong>测试底层图床通畅度</strong>：
+<ul>
+<li>在浏览器直接访问：<code>https://img.brightwater.cc/图片在Backblaze的路径.jpg</code>。</li>
+<li>如果能正常显示图片，说明 <code>image-serving-bridge</code> 与 Backblaze 已经接通。</li>
+</ul>
+</li>
+</ol>
+<h4 id="第二步批量修改-sink-项目的-d1-数据库最关键的一步">第二步：批量修改 Sink 项目的 D1 数据库（最关键的一步）</h4>
+<p>Sink 服务的原理是：当访问 <code>sink.brightwater.cc/xxx</code> 时，Sink 会查询数据库并重定向到你的图床真实地址（即原来的 <code>image.旧域名.com/xxx</code>）。因为旧域名失效了，所以必须将数据库里的目标地址批量修改为新域名。</p>
+<ol>
+<li>进入 Cloudflare Dashboard <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>Storage &amp; Database</strong> <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="mrel">→</span></span></span></span> <strong>D1</strong>。</li>
+<li>找到 Sink 绑定的 D1 数据库（通常名称包含 <code>sink</code>）。</li>
+<li>点击 <strong>Console</strong> 页签，执行以下 SQL 批量替换语句（请将 <code>&lt;旧图床域名&gt;</code> 替换为您去年的旧域名，如 <code>image.olddomain.com</code>）：</li>
+</ol>
+<pre><code class="language-sql">UPDATE links 
+SET url = REPLACE(url, '&lt;旧图床域名&gt;', 'img.brightwater.cc') 
+WHERE url LIKE '%&lt;旧图床域名&gt;%';
+</code></pre>
+<p><em>(注：如果你有两个存储桶分别对应了 <code>img</code> 和 <code>image</code> 两个子域名，请对应执行两次替换语句)</em>。</p>
+<blockquote>
+<p><a href="%E6%8F%90%E7%A4%BA">tips</a><br>
+Gemini给的这第二步思路完全是错的，sink这类项目的数据库不是在D1里面，而是以KV namespace的形式存储。KV是一条一条在CF的页面显示的，一条一条手动修改完全不切实际<br>
+这个时候，前面提到的wrangler又派上用场了。可以通过询问AI，让帮忙写一个脚本在powershell里直接就把活儿干了，这里需要注意两点：一是需要用到 KV namespace ID，二是记得要在脚本查询拉取KV参数时加入remote，不然wrangler的kv命令优先读取本地开发环境获取不到实际参数<br>
+脚本贴出来仅供参考</p>
+</blockquote>
+<pre><code># 1. 填入你的 KV Namespace ID保留引号
+$kvId = &quot;粘贴你的KV_NAMESPACE_ID&quot;
+
+Write-Host &quot;正在从 Cloudflare 线上拉取所有短链 Key 列表...&quot; -ForegroundColor Cyan
+
+# 2. 加上 --remote 强制拉取线上真实 KV 列表
+$rawOutput = npx wrangler kv key list --namespace-id=$kvId --remote 2&gt;$null
+$rawText = ($rawOutput | Out-String).Trim()
+
+# 精准查找 JSON 数组内容
+$jsonStart = $rawText.IndexOf('[')
+$jsonEnd = $rawText.LastIndexOf(']')
+
+if ($jsonStart -ge 0 -and $jsonEnd -gt $jsonStart) {
+    $jsonStr = $rawText.Substring($jsonStart, $jsonEnd - $jsonStart + 1)
+    $keysList = $jsonStr | ConvertFrom-Json
+} else {
+    Write-Host &quot;❌ 无法解析 Key 列表，Cloudflare 返回的内容如下：&quot; -ForegroundColor Red
+    Write-Host $rawText
+    return
+}
+
+# 确保强制转换为数组计算数量
+$keysArray = @($keysList)
+$totalKeys = $keysArray.Count
+Write-Host &quot;成功在线上获取到 $totalKeys 个短链 Key，开始逐一校验与替换...&quot; -ForegroundColor Green
+
+if ($totalKeys -eq 0) {
+    Write-Host &quot;⚠️ 云端返回的 Key 列表为空。如果你的 KV 中数据超过 1000 条，或者用了前缀，请运行调试指令确认。&quot; -ForegroundColor Yellow
+    return
+}
+
+$bulkData = @()
+$updatedCount = 0
+
+# 3. 遍历每一个 Key 并替换 Value JSON 中的域名
+foreach ($item in $keysArray) {
+    $k = $item.name
+    
+    # 获取线上真实的 Key 内容
+    $valOutput = npx wrangler kv key get $k --namespace-id=$kvId --remote 2&gt;$null
+    $val = ($valOutput | Out-String).Trim()
+    
+    if ([string]::IsNullOrWhiteSpace($val)) { continue }
+
+    # 正则批量替换 JSON 内的旧域名
+    $newVal = $val `
+        -replace 'image\.olddomain1\.net', 'new_domain-1' `
+        -replace 'image\.olddomain2\.org', 'new_domain-2' `
+
+    # 如果发生变化，输出替换明细
+    if ($val -ne $newVal) {
+        Write-Host &quot;[发现旧域名] Key: $k&quot; -ForegroundColor Green
+        try {
+            $oldUrl = ($val | ConvertFrom-Json).url
+            $newUrl = ($newVal | ConvertFrom-Json).url
+            Write-Host &quot;  旧地址: $oldUrl&quot; -ForegroundColor Gray
+            Write-Host &quot;  新地址: $newUrl&quot; -ForegroundColor Cyan
+        } catch {
+            Write-Host &quot;  修改前: $val&quot; -ForegroundColor Gray
+            Write-Host &quot;  修改后: $newVal&quot; -ForegroundColor Cyan
+        }
+        $updatedCount++
+    }
+
+    $bulkData += @{
+        key = $k
+        value = $newVal
+    }
+}
+
+# 4. 生成批量提交文件并同步上传回 Cloudflare 线上
+if ($updatedCount -gt 0) {
+    $jsonOutput = $bulkData | ConvertTo-Json -Depth 10 -Compress
+    $filePath = Join-Path (Get-Location) &quot;kv_bulk_update.json&quot;
+    [System.IO.File]::WriteAllText($filePath, $jsonOutput, [System.Text.Encoding]::UTF8)
+    
+    Write-Host &quot;`n正在将 $updatedCount 条更新后的数据批量提交回 Cloudflare KV 线上环境...&quot; -ForegroundColor Cyan
+    npx wrangler kv bulk put kv_bulk_update.json --namespace-id=$kvId --remote
+    Write-Host &quot;🎉 恭喜！全部 KV 短链域名批量替换完成！&quot; -ForegroundColor Green
+} else {
+    Write-Host &quot;`n扫描完成，所有线上短链的 URL 已经是最新域名，无需替换。&quot; -ForegroundColor Yellow
+}
+</code></pre>
+<h4 id="第三步批量替换-obsidian-本地笔记中的短链地址">第三步：批量替换 Obsidian 本地笔记中的短链地址</h4>
+<p>你笔记中写入的链接形式为 <code>https://sink.旧域名.com/picturecode</code>，现在需要把它们更新为新的短链域名。</p>
+<ul>
+<li><strong>推荐方法（VS Code 批量替换）</strong>：
+<ul>
+<li>用 <strong>VS Code</strong> 打开你的 Obsidian Vault 仓库文件夹。</li>
+<li>按下 <code>Ctrl + Shift + F</code>（Mac 为 <code>Cmd + Shift + F</code>）打开全局搜索与替换。</li>
+<li><strong>查找</strong>：<code>https://sink.旧域名.com</code></li>
+<li><strong>替换为</strong>：<code>https://sink.brightwater.cc</code> （或你设置的新短链域名）</li>
+<li>点击“全部替换”。</li>
+</ul>
+</li>
+<li><strong>替代方法（Obsidian 插件）</strong>：
+<ul>
+<li>使用 Obsidian 社区插件 <strong>Global Search and Replace</strong> 或 <strong>Apply Patterns</strong> 进行全库替换。</li>
+</ul>
+</li>
+</ul>
+<h4 id="第四步重新配置-piclist">第四步：重新配置 PicList</h4>
+<ul>
+<li>打开 PicList，更新 Backblaze 图床配置中的 <strong>自定义域名（Custom Domain）</strong> 为 <code>img.brightwater.cc</code>。</li>
+<li>更新 Sink 短链插件/自定义 API 配置中的域名为 <code>sink.brightwater.cc</code>。</li>
+</ul>
+<hr>
+<h3 id="32-图床云存储选型与购买建议">3.2 图床云存储选型与购买建议</h3>
+<p>你目前的架构是 <strong>Backblaze B2 (存储) + Cloudflare Worker (缓存/CDN) + Sink (短链)</strong>，这已经是极客圈非常高性价比的组合。针对你提到的存储空间拓展及用途划分，建议如下：</p>
+<h4 id="1-产品对比与推荐">1. 产品对比与推荐</h4>
+<ul>
+<li><strong>方案 A：Cloudflare R2（首推，强烈建议）</strong>
+<ul>
+<li><strong>费用</strong>：每月 <strong>10 GB 免费存储</strong>；超过后 $0.015/GB/月。<strong>最关键的是：0 出口流量费（Zero Egress Fees）</strong>！</li>
+<li><strong>优势</strong>：与你的 Cloudflare Worker、Sink 原生集成，不需要配置复杂的前端 Bridge Worker，直接绑定自定义域名即可，性能和稳定性比 Backblaze 更高。</li>
+<li><strong>适用</strong>：Obsidian 笔记图片 + 博客图片统一存储。</li>
+</ul>
+</li>
+<li><strong>方案 B：Backblaze B2 升级付费（继续沿用）</strong>
+<ul>
+<li><strong>费用</strong>：10 GB 免费，超出后 $0.006/GB/月。由于搭配 Cloudflare 带宽联盟，流量同样免费。</li>
+<li><strong>优势</strong>：你已经非常熟悉，只需绑定信用卡即可开启无限容量，价格极度廉价。</li>
+</ul>
+</li>
+<li><strong>方案 C：阿里云 OSS / 腾讯云 COS（仅作为国内备选）</strong>
+<ul>
+<li><strong>费用</strong>：存储费 + <strong>下行流量费（极贵）</strong> + HTTPS 请求费。</li>
+<li><strong>劣势</strong>：如果被人恶意刷流量，可能会产生高额账单；且国内节点绑域名必须要求域名有 <strong>ICP 备案</strong>。</li>
+</ul>
+</li>
+</ul>
+<h4 id="2-图床划分最佳实践建议">2. 图床划分最佳实践建议</h4>
+<ul>
+<li><strong>Obsidian 本地笔记图床</strong>：继续使用 <strong>Cloudflare R2</strong> 或 <strong>Backblaze B2</strong>。因为笔记图片多、量大，海外无流量费的存储桶是绝对的安全区。</li>
+<li><strong>博文图床</strong>：
+<ul>
+<li><strong>不必单独买一套存储</strong>，直接共用 R2 或 Backblaze。</li>
+<li>在 Cloudflare 上开启 <strong>WebP 自动化压缩</strong> 和 <strong>强缓存规则</strong>，极大地节省博文加载延迟。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="33-博客与专栏建站指南服务器与-vitepress-选型">3.3  博客与专栏建站指南（服务器与 VitePress 选型）</h3>
+<p>针对你的新域名 <code>brightwater.cc</code>，计划建设 <strong>Blog</strong>（博客）与 <strong>Column/Docs</strong>（专栏）两个网站：</p>
+<h4 id="1-服务器选用国内-vs-国外">1. 服务器选用：国内 vs 国外？</h4>
+<p><strong>结论：强烈推荐使用海外静态托管平台（Cloudflare Pages 或 Vercel），完全不需要购买阿里云 ECS 服务器！</strong></p>
+<ul>
+<li><strong>为什么不推荐阿里云国内服务器？</strong>
+<ul>
+<li><strong>备案限制</strong>：<code>.cc</code> 域名在国内部分省份备案流程繁琐，且国内服务器必须备案才能解封 80/443 端口。</li>
+<li><strong>运维成本</strong>：需要自己维护 Nginx、SSL 证书续期、防 Linux 病毒等。</li>
+<li><strong>额外开销</strong>：国内服务器带宽小（1~3Mbps 极慢），性价比低。</li>
+</ul>
+</li>
+<li><strong>为什么推荐 Cloudflare Pages / Vercel？</strong>
+<ul>
+<li><strong>免费且无限流量</strong>：VitePress 编译出来的是纯静态 HTML/JS，托管在 Cloudflare Pages 上<strong>完全免费</strong>。</li>
+<li><strong>自动化部署</strong>：连接 GitHub 仓库后，你每次提交 Markdown 笔记，云端自动编译上线。</li>
+<li><strong>全球 CDN 加速</strong>：配合你的 <code>brightwater.cc</code> 域名，全球访问速度极快。</li>
+</ul>
+</li>
+</ul>
+<h4 id="2-网站架构与-vitepress-主题选型">2. 网站架构与 VitePress 主题选型</h4>
+<p>建议域名规划：</p>
+<ul>
+<li>博客地址：<code>blog.brightwater.cc</code></li>
+<li>专栏地址：<code>wiki.brightwater.cc</code> 或 <code>column.brightwater.cc</code></li>
+</ul>
+<h5 id="方案推荐">方案推荐：</h5>
+<ul>
+<li><strong>专栏网站（Column / Docs）</strong>：
+<ul>
+<li><strong>推荐框架</strong>：原生 <strong>VitePress</strong>（默认主题）。</li>
+<li><strong>理由</strong>：VitePress 默认主题就是为了文档和专栏而生的，自带强大的侧边栏、目录导航、全文搜索（FlexSearch/Algolia）、Dark Mode，非常适合沉淀体系化知识。</li>
+</ul>
+</li>
+<li><strong>博客网站（Blog）</strong>：
+<ul>
+<li><strong>方案 1（纯 VitePress 路线）</strong>：使用 VitePress + <strong><code>vitepress-plugin-blog</code></strong> 或 <strong><code>vitepress-theme-blog</code></strong> 插件，可以快速生成文章列表、标签分类、时间轴。</li>
+<li><strong>方案 2（更专业的博客系统，可选）</strong>：如果觉得 VitePress 做博客排版较精简，可以考虑 <strong>Hugo + Stack/PaperMod 主题</strong> 或 <strong>Astro + Starlight</strong>，不过继续统一用 VitePress 维护成本最低。</li>
+</ul>
+</li>
+</ul>
+<h4 id="3-部署全流程概览未来工作流">3. 部署全流程概览（未来工作流）</h4>
+<ol>
+<li>在 GitHub 创建两个私有/公开仓库：<code>brightwater-blog</code> 和 <code>brightwater-docs</code>。</li>
+<li>本地用 VitePress 撰写文章（图片直接用 PicList 上传到你的新图床，插入 <code>sink.brightwater.cc</code> 短链）。</li>
+<li>执行 <code>git push</code> 推送到 GitHub。</li>
+<li>Cloudflare Pages 自动拉取构建，10 秒内新文章在 <code>blog.brightwater.cc</code> 上线。<br>
+[Timestamp: 2026/08/27 10:53:55]</li>
+</ol>
+<h1 id="4-一点补充及说明">4. 一点补充及说明</h1>
+<h2 id="41-有关backblazecloudflare组合的说明">4.1 有关backblaze+cloudflare组合的说明</h2>
+<p>这个组合是我目前找到的免费方案里最香的一个。Backblaze 与 Cloudflare 有带宽联盟，“CF Worker + 对象存储”的图床架构是 很受Cloudflare鼓励的，封号什么的不存在的。</p>
+<p>因为使用了CF 的worker规则，所以设置用于访问图片的子域名时（一般在域名管理下的DNS管理），一定要开启代理（橘黄色小云朵），这样才能工作，而且好处多多。</p>
+<p>根据Gemini的说法，这个方案可能会有一点点误拦裂图风险，但如果在cloudflare上用付费的WAF功能单独把图床子域名拎出来降低security设置，或者直接把整个托管域名全局风险设定降低，都似乎不太理想。前者费钱，后者得不偿失。就这样吧，反正我目前没遇到过误拦裂图。</p>
+<p>还有一点，为了防止外部直接绕开cloudflare这个机制去访问backblaze里的资源，强烈建议将所有bucket类型设置为private，不管是私人图片还是用于公开发布的图片。上面“白嫖backblaze 10G对象存储”那篇博文里，将bucket设置为public，是有点问题的。</p>
+<h2 id="42-关于image-serving-bridge-worker的说明">4.2 关于image-serving-bridge worker的说明</h2>
+<p>这个worker的代码，在大概了解原理的基础上，按着自己的需求，直接找AI改一改就行。不一定照抄，有的地方可以自己tailor</p>
+<p>直接采用Allison博文里的方案，是不用自己再去搞一个域名来当图床域名的，因为如上所述的image-serving-bridge这个worker弄好之后，cloudflare会给这个worker自动生成一个worker-name.your-cloudflare-username.workers.dev 这样的域名，直接用来配置即可。</p>
+<p>我之所以用购买的域名弄两个子域名来做图床，是因为我的 image-hosting发生在个人ob笔记和对外公开的博文两个使用场景，所以 backblaze 建立两个bucket与之对应来配置。多个bucket，与多个image-hosting 域名，需要在 worker 的代码里自己修改实现一一对应。当然，piclist设置也要一一对应，才能保证正常运行。</p>
+<p>如Allison在她的博文中所说，这个worker代码，通过定义ALLOWED_REFERERS 访问白名单，限制了外链引用，这是很好的做法，但是一定记得要把你准备放图的域名和子域名都列上去。另外在本地笔记的话，这个header一般为空，空的ALLOWED_REFERERS也要弄上，不然会影响读取。</p>
+<p>不过，Allison似乎太小气了，请求次数限制似乎弄的太小。Backblaze官方对免费用户每天的请求限额是：B类下载 2500次，C类鉴权类（即worker这种需要拿着临时访问授权 Token去访问的的）2500次。其实可以把worker代码里的MAX_REQUESTS_PER_DAY（这是worker规则下的单独账本） 和KV NAMESPACE里限制数（这是全局账本）都设置为2000，保留一部分给自己用来上传图片和后台Rclone管理，足够了。缓存时间也大可不必设置为1年，30天足够了。缓存一次30天里的相同请求都只计数一次，这样怎么说都不用担心超限额了。</p>
+<p>另外一点，在cloudflare给自己域名添加图床子域名，不要像我上面提问中提到的自行通过Domain---your-domain---DNS records--add records （方式一）这样的方式去添加，而是通过 Worker&amp;Pages---image-serving-bridge---Add Custom Domain 这个路径（方式二）直接在worker里添加（补全域名添加），添加后会自动绑定你托管的域名。<br>
+用方式一添加的子域名与worker没有连接，无法工作，必须是方式二才行。</p>
+<h2 id="43-sink-worker的域名问题">4.3 sink worker的域名问题</h2>
+<p>相同的，sink项目部署到cloudflare生成的worker也会生成一个域名，且可以直接网页访问，输入设置的密码即可网页端查看每条短链转换数据。我弄了一个custom domain，纯属闲的</p>
+
+                </div>
+            </article>
+        </div>
+
+        
+            <div class="next-post">
+                <div class="next gt-c-content-color-first">下一篇</div>
+                <a href="https://SplendidJason.github.io/post/teker_no000-open_remark/" class="post-title gt-a-link">
+                    TEKer_No.000-开刊词
+                </a>
+            </div>
+        
+
+        
+
+        
+            
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.min.css">
+<script src="https://cdn.jsdelivr.net/npm/gitalk/dist/gitalk.min.js"></script>
+<script>
+    // md5.min.js
+    !function(n){
+        "use strict";
+        function d(n,t){var r=(65535&n)+(65535&t);return(n>>16)+(t>>16)+(r>>16)<<16|65535&r}
+        function f(n,t,r,e,o,u){return d((c=d(d(t,n),d(e,u)))<<(f=o)|c>>>32-f,r);var c,f}
+        function l(n,t,r,e,o,u,c){return f(t&r|~t&e,n,t,o,u,c)}
+        function v(n,t,r,e,o,u,c){return f(t&e|r&~e,n,t,o,u,c)}
+        function g(n,t,r,e,o,u,c){return f(t^r^e,n,t,o,u,c)}
+        function m(n,t,r,e,o,u,c){return f(r^(t|~e),n,t,o,u,c)}
+        function i(n,t){var r,e,o,u,c;n[t>>5]|=128<<t%32,n[14+(t+64>>>9<<4)]=t;var f=1732584193,i=-271733879,a=-1732584194,h=271733878;for(r=0;r<n.length;r+=16)f=l(e=f,o=i,u=a,c=h,n[r],7,-680876936),h=l(h,f,i,a,n[r+1],12,-389564586),a=l(a,h,f,i,n[r+2],17,606105819),i=l(i,a,h,f,n[r+3],22,-1044525330),f=l(f,i,a,h,n[r+4],7,-176418897),h=l(h,f,i,a,n[r+5],12,1200080426),a=l(a,h,f,i,n[r+6],17,-1473231341),i=l(i,a,h,f,n[r+7],22,-45705983),f=l(f,i,a,h,n[r+8],7,1770035416),h=l(h,f,i,a,n[r+9],12,-1958414417),a=l(a,h,f,i,n[r+10],17,-42063),i=l(i,a,h,f,n[r+11],22,-1990404162),f=l(f,i,a,h,n[r+12],7,1804603682),h=l(h,f,i,a,n[r+13],12,-40341101),a=l(a,h,f,i,n[r+14],17,-1502002290),f=v(f,i=l(i,a,h,f,n[r+15],22,1236535329),a,h,n[r+1],5,-165796510),h=v(h,f,i,a,n[r+6],9,-1069501632),a=v(a,h,f,i,n[r+11],14,643717713),i=v(i,a,h,f,n[r],20,-373897302),f=v(f,i,a,h,n[r+5],5,-701558691),h=v(h,f,i,a,n[r+10],9,38016083),a=v(a,h,f,i,n[r+15],14,-660478335),i=v(i,a,h,f,n[r+4],20,-405537848),f=v(f,i,a,h,n[r+9],5,568446438),h=v(h,f,i,a,n[r+14],9,-1019803690),a=v(a,h,f,i,n[r+3],14,-187363961),i=v(i,a,h,f,n[r+8],20,1163531501),f=v(f,i,a,h,n[r+13],5,-1444681467),h=v(h,f,i,a,n[r+2],9,-51403784),a=v(a,h,f,i,n[r+7],14,1735328473),f=g(f,i=v(i,a,h,f,n[r+12],20,-1926607734),a,h,n[r+5],4,-378558),h=g(h,f,i,a,n[r+8],11,-2022574463),a=g(a,h,f,i,n[r+11],16,1839030562),i=g(i,a,h,f,n[r+14],23,-35309556),f=g(f,i,a,h,n[r+1],4,-1530992060),h=g(h,f,i,a,n[r+4],11,1272893353),a=g(a,h,f,i,n[r+7],16,-155497632),i=g(i,a,h,f,n[r+10],23,-1094730640),f=g(f,i,a,h,n[r+13],4,681279174),h=g(h,f,i,a,n[r],11,-358537222),a=g(a,h,f,i,n[r+3],16,-722521979),i=g(i,a,h,f,n[r+6],23,76029189),f=g(f,i,a,h,n[r+9],4,-640364487),h=g(h,f,i,a,n[r+12],11,-421815835),a=g(a,h,f,i,n[r+15],16,530742520),f=m(f,i=g(i,a,h,f,n[r+2],23,-995338651),a,h,n[r],6,-198630844),h=m(h,f,i,a,n[r+7],10,1126891415),a=m(a,h,f,i,n[r+14],15,-1416354905),i=m(i,a,h,f,n[r+5],21,-57434055),f=m(f,i,a,h,n[r+12],6,1700485571),h=m(h,f,i,a,n[r+3],10,-1894986606),a=m(a,h,f,i,n[r+10],15,-1051523),i=m(i,a,h,f,n[r+1],21,-2054922799),f=m(f,i,a,h,n[r+8],6,1873313359),h=m(h,f,i,a,n[r+15],10,-30611744),a=m(a,h,f,i,n[r+6],15,-1560198380),i=m(i,a,h,f,n[r+13],21,1309151649),f=m(f,i,a,h,n[r+4],6,-145523070),h=m(h,f,i,a,n[r+11],10,-1120210379),a=m(a,h,f,i,n[r+2],15,718787259),i=m(i,a,h,f,n[r+9],21,-343485551),f=d(f,e),i=d(i,o),a=d(a,u),h=d(h,c);return[f,i,a,h]}
+        function a(n){var t,r="",e=32*n.length;for(t=0;t<e;t+=8)r+=String.fromCharCode(n[t>>5]>>>t%32&255);return r}
+        function h(n){var t,r=[];for(r[(n.length>>2)-1]=void 0,t=0;t<r.length;t+=1)r[t]=0;var e=8*n.length;for(t=0;t<e;t+=8)r[t>>5]|=(255&n.charCodeAt(t/8))<<t%32;return r}
+        function e(n){var t,r,e="0123456789abcdef",o="";for(r=0;r<n.length;r+=1)t=n.charCodeAt(r),o+=e.charAt(t>>>4&15)+e.charAt(15&t);return o}
+        function r(n){return unescape(encodeURIComponent(n))}
+        function o(n){return a(i(h(t=r(n)),8*t.length));var t}
+        function u(n,t){return function(n,t){var r,e,o=h(n),u=[],c=[];for(u[15]=c[15]=void 0,16<o.length&&(o=i(o,8*n.length)),r=0;r<16;r+=1)u[r]=909522486^o[r],c[r]=1549556828^o[r];return e=i(u.concat(h(t)),512+8*t.length),a(i(c.concat(e),640))}(r(n),r(t))}
+        function t(n,t,r){return t?r?u(t,n):e(u(t,n)):r?o(n):e(o(n))}
+        "function"==typeof define&&define.amd?define(function(){return t}):"object"==typeof module&&module.exports?module.exports=t:n.md5=t;
+    }(this);
+</script>
+
+
+<div id="gitalk-container"></div>
+
+<script>
+
+  var gitalk = new Gitalk({
+    clientID: 'Ov23lifbbDlJP76gha1b',
+    clientSecret: '95848f73810b29b10cbc775b033dd5442ffd0e09',
+    repo: 'SplendidJason.github.io',
+    owner: 'SplendidJason',
+    admin: ['SplendidJason'],
+    id: md5(location.pathname),      // Ensure uniqueness and length less than 50
+    distractionFreeMode: false       // Facebook-like distraction free mode
+  })
+
+  gitalk.render('gitalk-container')
+
+</script>
+
+            
+
+            
+        
+
+        
+
+        <div class="site-footer gt-c-content-color-first">
+    <div class="slogan gt-c-content-color-first">本博客仅用于收录个人笔记和知识库，博客中相关内容不做任何商业用途。</div>
+    <div class="social-container">
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+    </div>
+    <div class="footer-info">
+        开诚持正，勇猛精进。拥抱数字科技，提高个人生产力。
+    </div>
+    <div>
+        Theme by <a href="https://imhanjie.com/" target="_blank">imhanjie</a>, Powered by <a
+                href="https://github.com/getgridea/gridea" target="_blank">Gridea | <a href="https://SplendidJason.github.io/atom.xml" target="_blank">RSS</a></a>
+    </div>
+</div>
+
+<script>
+  hljs.initHighlightingOnLoad()
+</script>
+
+    </div>
+</div>
+</body>
+</html>
